@@ -1,17 +1,18 @@
 import httpx
 
 from app.logging_config import logger
+from app.models.health import ServiceStatus
 from app.redis_cache.cache import redis_client
 
 
-def is_redis_available():
+def is_redis_available() -> ServiceStatus:
     try:
         redis_client.ping()
         logger.info("REDIS CONNECTED")
-        return "connected"
+        return ServiceStatus.available
     except Exception as e:
         logger.error("REDIS UNAVAILABLE")
-        return "unavailable"
+        return ServiceStatus.not_available
 
 
 async def is_weather_api_available() -> bool:

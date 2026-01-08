@@ -4,3 +4,4 @@ redis
 python-dotenv
 pydantic-settings
 structlog
+pytest
