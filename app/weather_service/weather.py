@@ -1,4 +1,3 @@
-
 import httpx
 
 from app.models.city import City
@@ -6,6 +5,7 @@ from app.models.weather import Weather
 from app.redis_cache.cache import city_cache, weather_cache
 
 from app.logging_config import logger
+
 
 def get_city_data(city_name: str) -> City:
     """Return data about specific city."""
@@ -35,18 +35,20 @@ def get_weather_data_from_api(city: City) -> Weather:
     """Return weather data about a specific city."""
     logger.info("CACHED_WEATHER_MISS", city=city.name)
     response = httpx.get(
-            f"https://api.open-meteo.com/v1/forecast?latitude={city.latitude}&longitude={city.longitude}&current_weather=true"
-        ).json()
-    return  response
+        f"https://api.open-meteo.com/v1/forecast?latitude={city.latitude}&longitude={city.longitude}&current_weather=true"
+    ).json()
+    return response
 
 
 def get_weather(city_name: str):
     """Return weather data about a specific city."""
-    # TODO check if the city already exists in the cache
     city = get_city_data(city_name)
     cache = weather_cache()
     if weather_data := cache.get_weather(city_name):
-        logger.info("CACHED_WEATHER_HIT", city=city_name,)
+        logger.info(
+            "CACHED_WEATHER_HIT",
+            city=city_name,
+        )
         return weather_data
     weather_data = get_weather_data_from_api(city)
     cache.save_weather(city_name, weather_data)
