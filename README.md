@@ -90,10 +90,8 @@ The test suite includes:
 - **Redis** is used as a high-performance caching layer to minimize upstream calls.
 - **Structured logging** is implemented using `structlog`, with request tracing enabled via unique request IDs.
 - **City name resolution** is done via Open-Meteo’s geocoding API to obtain latitude/longitude.
-- **Error handling** includes retry mechanisms to handle transient upstream issues.
 - **Metrics endpoint** (`/metrics`) exposes Prometheus-compatible data such as request latency and cache hit rates.
-- **Graceful shutdown** is implemented to ensure the app handles `SIGTERM` correctly and shuts down cleanly.
-
+- **Graceful shutdown** uvicorn handles SIGTERM gracefully by default. Application shutdown events are available for cleanup (not yet customized).
 ---
 
 ## Improvements (Given More Time)

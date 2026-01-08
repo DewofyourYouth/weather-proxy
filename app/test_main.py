@@ -6,6 +6,34 @@ from app.models.weather import Weather
 from app.weather_service.weather import CityNotFoundError, ExternalAPIError
 
 
+class FakeResponse:
+    def __init__(self, json_data, status_code=200):
+        self._json_data = json_data
+        self.status_code = status_code
+
+    def json(self):
+        return self._json_data
+
+    def raise_for_status(self):
+        return None
+
+
+class FakeCityCache:
+    def get_city(self, city_name: str):
+        return None
+
+    def save_city(self, city_name: str, city):
+        return None
+
+
+class FakeWeatherCache:
+    def get_weather(self, city_name: str):
+        return None
+
+    def save_weather(self, city_name: str, weather_data):
+        return None
+
+
 def test_root():
     client = TestClient(app)
     response = client.get("/")
@@ -81,3 +109,48 @@ def test_health(monkeypatch):
         "status": "ok",
         "dependencies": {"weather_api": "available", "redis": "available"},
     }
+
+
+def test_get_weather_integration_with_mocked_upstream(monkeypatch):
+    client = TestClient(app)
+
+    def fake_httpx_get(url, params=None, timeout=None):
+        if "geocoding-api.open-meteo.com" in url:
+            return FakeResponse(
+                {
+                    "results": [
+                        {
+                            "name": "London",
+                            "country_code": "GB",
+                            "latitude": 51.50853,
+                            "longitude": -0.12574,
+                        }
+                    ]
+                }
+            )
+        if "api.open-meteo.com" in url:
+            return FakeResponse(
+                {
+                    "current_weather": {
+                        "time": "2024-01-01T00:00",
+                        "temperature": 10.5,
+                        "windspeed": 5.0,
+                        "winddirection": 180,
+                        "is_day": 1,
+                        "weathercode": 1,
+                    }
+                }
+            )
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr("app.weather_service.weather.httpx.get", fake_httpx_get)
+    monkeypatch.setattr("app.weather_service.weather.city_cache", lambda: FakeCityCache())
+    monkeypatch.setattr(
+        "app.weather_service.weather.weather_cache", lambda: FakeWeatherCache()
+    )
+
+    response = client.get("/weather", params={"city_name": "London"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["city"] == "London"
+    assert data["temperature_c"] == 10.5
