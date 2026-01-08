@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.health import RedisStatus
+from app.models.health import ServiceStatus
 from app.models.weather import Weather
 from app.weather_service.weather import CityNotFoundError, ExternalAPIError
 
@@ -68,7 +68,7 @@ def test_health(monkeypatch):
         return True
 
     def fake_is_redis_available():
-        return RedisStatus.connected
+        return ServiceStatus.available
 
     monkeypatch.setattr(
         "app.main.is_weather_api_available", fake_is_weather_api_available
