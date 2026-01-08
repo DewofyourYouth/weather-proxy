@@ -1,9 +1,16 @@
+import time
+
 import httpx
 
 from app.logging_config import logger
 from app.models.city import City
 from app.models.weather import Weather
 from app.redis_cache.cache import city_cache, weather_cache
+
+RETRY_ATTEMPTS = 3
+RETRY_BASE_DELAY_S = 0.3
+RETRY_MAX_DELAY_S = 2.0
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class WeatherServiceError(Exception):
@@ -16,6 +23,60 @@ class CityNotFoundError(WeatherServiceError):
 
 class ExternalAPIError(WeatherServiceError):
     pass
+
+
+def _request_with_retry(
+    *,
+    url: str,
+    params: dict,
+    timeout: float,
+    event_prefix: str,
+    log_context: dict,
+    error_message: str,
+) -> httpx.Response:
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            response = httpx.get(url, params=params, timeout=timeout)
+            logger.info(
+                f"{event_prefix}_RESPONSE",
+                **log_context,
+                status=response.status_code,
+                attempt=attempt,
+            )
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            retryable = status_code in RETRYABLE_STATUS_CODES
+            logger.error(
+                f"{event_prefix}_BAD_STATUS",
+                **log_context,
+                status=status_code,
+                attempt=attempt,
+                retryable=retryable,
+            )
+            if not retryable or attempt == RETRY_ATTEMPTS:
+                raise ExternalAPIError(error_message) from exc
+        except httpx.RequestError as exc:
+            logger.error(
+                f"{event_prefix}_REQUEST_FAILED",
+                **log_context,
+                error=str(exc),
+                attempt=attempt,
+            )
+            if attempt == RETRY_ATTEMPTS:
+                raise ExternalAPIError(error_message) from exc
+
+        delay = min(RETRY_BASE_DELAY_S * (2 ** (attempt - 1)), RETRY_MAX_DELAY_S)
+        logger.info(
+            f"{event_prefix}_RETRY",
+            **log_context,
+            attempt=attempt + 1,
+            delay_s=delay,
+        )
+        time.sleep(delay)
+
+    raise ExternalAPIError(error_message)
 
 
 def get_city_data(city_name: str) -> City:
@@ -31,22 +92,14 @@ def get_city_data(city_name: str) -> City:
 
 def get_city_from_api(city_name: str) -> City:
     logger.info("CACHE_CITY_MISS", city=city_name)
-    try:
-        response = httpx.get(
-            "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": city_name},
-            timeout=5,
-        )
-        logger.info("CITY_LOOKUP_RESPONSE", city=city_name, status=response.status_code)
-        response.raise_for_status()
-    except httpx.RequestError as exc:
-        logger.error("CITY_LOOKUP_REQUEST_FAILED", city=city_name, error=str(exc))
-        raise ExternalAPIError("City lookup failed") from exc
-    except httpx.HTTPStatusError as exc:
-        logger.error(
-            "CITY_LOOKUP_BAD_STATUS", city=city_name, status=exc.response.status_code
-        )
-        raise ExternalAPIError("City lookup failed") from exc
+    response = _request_with_retry(
+        url="https://geocoding-api.open-meteo.com/v1/search",
+        params={"name": city_name},
+        timeout=5,
+        event_prefix="CITY_LOOKUP",
+        log_context={"city": city_name},
+        error_message="City lookup failed",
+    )
 
     try:
         results = response.json().get("results") or []
@@ -67,26 +120,18 @@ def get_city_from_api(city_name: str) -> City:
 def get_weather_data_from_api(city: City) -> Weather:
     """Return weather data about a specific city."""
     logger.info("CACHED_WEATHER_MISS", city=city.name)
-    try:
-        response = httpx.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": city.latitude,
-                "longitude": city.longitude,
-                "current_weather": True,
-            },
-            timeout=5,
-        )
-        logger.info("WEATHER_RESPONSE", city=city.name, status=response.status_code)
-        response.raise_for_status()
-    except httpx.RequestError as exc:
-        logger.error("WEATHER_REQUEST_FAILED", city=city.name, error=str(exc))
-        raise ExternalAPIError("Weather lookup failed") from exc
-    except httpx.HTTPStatusError as exc:
-        logger.error(
-            "WEATHER_BAD_STATUS", city=city.name, status=exc.response.status_code
-        )
-        raise ExternalAPIError("Weather lookup failed") from exc
+    response = _request_with_retry(
+        url="https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": city.latitude,
+            "longitude": city.longitude,
+            "current_weather": True,
+        },
+        timeout=5,
+        event_prefix="WEATHER",
+        log_context={"city": city.name},
+        error_message="Weather lookup failed",
+    )
 
     data = response.json()
     if "current_weather" not in data:
