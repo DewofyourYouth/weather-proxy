@@ -1,0 +1,6 @@
+fastapi[standard]
+httpx
+redis
+python-dotenv
+pydantic-settings
+structlog

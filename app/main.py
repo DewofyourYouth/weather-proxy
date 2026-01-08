@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.models.weather import Weather
 from app.weather_service.weather import get_weather
 
 app = FastAPI()
@@ -11,5 +12,5 @@ async def root():
 
 
 @app.get("/weather")
-async def get_weather_for_city(city_name: str):
+async def get_weather_for_city(city_name: str) -> Weather:
     return get_weather(city_name)
