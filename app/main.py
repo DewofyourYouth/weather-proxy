@@ -1,8 +1,9 @@
 import time
 import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.health.health_check import is_redis_available, is_weather_api_available
 from app.logging_config import logger
@@ -18,6 +19,13 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 
 app = FastAPI()
 
+REQUEST_COUNT = Counter(
+    "http_requests_total", "Total HTTP requests", ["method", "path", "status_code"]
+)
+REQUEST_LATENCY = Histogram(
+    "http_request_duration_seconds", "HTTP request duration in seconds", ["path"]
+)
+
 
 @app.middleware("http")
 async def request_logging(request: Request, call_next):
@@ -30,14 +38,20 @@ async def request_logging(request: Request, call_next):
         response.headers["x-request-id"] = request_id
         return response
     finally:
-        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        duration_s = time.perf_counter() - start
+        duration_ms = round(duration_s * 1000, 2)
+        status_code = getattr(response, "status_code", 500)
         logger.info(
             "HTTP_REQUEST",
             method=request.method,
             path=request.url.path,
-            status_code=getattr(response, "status_code", None),
+            status_code=status_code,
             duration_ms=duration_ms,
         )
+        REQUEST_COUNT.labels(
+            method=request.method, path=request.url.path, status_code=status_code
+        ).inc()
+        REQUEST_LATENCY.labels(path=request.url.path).observe(duration_s)
         clear_contextvars()
 
 
@@ -78,3 +92,8 @@ async def health() -> HealthResponse:
             redis=is_redis_available(),
         ),
     )
+
+
+@app.get("/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
