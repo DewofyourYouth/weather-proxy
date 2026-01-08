@@ -1,10 +1,9 @@
 import httpx
 
+from app.logging_config import logger
 from app.models.city import City
 from app.models.weather import Weather
 from app.redis_cache.cache import city_cache, weather_cache
-
-from app.logging_config import logger
 
 
 class WeatherServiceError(Exception):
@@ -38,9 +37,7 @@ def get_city_from_api(city_name: str) -> City:
             params={"name": city_name},
             timeout=5,
         )
-        logger.info(
-            "CITY_LOOKUP_RESPONSE", city=city_name, status=response.status_code
-        )
+        logger.info("CITY_LOOKUP_RESPONSE", city=city_name, status=response.status_code)
         response.raise_for_status()
     except httpx.RequestError as exc:
         logger.error("CITY_LOOKUP_REQUEST_FAILED", city=city_name, error=str(exc))
@@ -80,9 +77,7 @@ def get_weather_data_from_api(city: City) -> Weather:
             },
             timeout=5,
         )
-        logger.info(
-            "WEATHER_RESPONSE", city=city.name, status=response.status_code
-        )
+        logger.info("WEATHER_RESPONSE", city=city.name, status=response.status_code)
         response.raise_for_status()
     except httpx.RequestError as exc:
         logger.error("WEATHER_REQUEST_FAILED", city=city.name, error=str(exc))
