@@ -91,7 +91,6 @@ The test suite includes:
 - **Structured logging** is implemented using `structlog`, with request tracing enabled via unique request IDs.
 - **City name resolution** is done via Open-Meteo’s geocoding API to obtain latitude/longitude.
 - **Metrics endpoint** (`/metrics`) exposes Prometheus-compatible data such as request latency and cache hit rates.
-- **Graceful shutdown** uvicorn handles SIGTERM gracefully by default. Application shutdown events are available for cleanup (not yet customized).
 
 ---
 
