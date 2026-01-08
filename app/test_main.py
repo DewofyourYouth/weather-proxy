@@ -79,5 +79,5 @@ def test_health(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "dependencies": {"weather_api": "available", "redis": "connected"},
+        "dependencies": {"weather_api": "available", "redis": "available"},
     }
