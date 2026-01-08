@@ -92,6 +92,7 @@ The test suite includes:
 - **City name resolution** is done via Open-Meteo’s geocoding API to obtain latitude/longitude.
 - **Metrics endpoint** (`/metrics`) exposes Prometheus-compatible data such as request latency and cache hit rates.
 - **Graceful shutdown** uvicorn handles SIGTERM gracefully by default. Application shutdown events are available for cleanup (not yet customized).
+
 ---
 
 ## Improvements (Given More Time)

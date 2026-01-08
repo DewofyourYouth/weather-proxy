@@ -144,7 +144,9 @@ def test_get_weather_integration_with_mocked_upstream(monkeypatch):
         raise AssertionError(f"Unexpected URL: {url}")
 
     monkeypatch.setattr("app.weather_service.weather.httpx.get", fake_httpx_get)
-    monkeypatch.setattr("app.weather_service.weather.city_cache", lambda: FakeCityCache())
+    monkeypatch.setattr(
+        "app.weather_service.weather.city_cache", lambda: FakeCityCache()
+    )
     monkeypatch.setattr(
         "app.weather_service.weather.weather_cache", lambda: FakeWeatherCache()
     )
