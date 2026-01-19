@@ -1,5 +1,7 @@
-import pytest
+import time
+
 import fakeredis
+import pytest
 from app.redis_cache.cache import *
 
 
@@ -63,3 +65,22 @@ def test_save_weather_to_cache(fake_redis):
 def test_get_weather_cache_miss_returns_none(fake_redis):
     cache = WeatherCache(fake_redis)
     assert cache.get_weather("Unknown City") is None
+
+
+def test_weather_cache_expires_after_ttl(fake_redis, monkeypatch):
+    monkeypatch.setattr("app.redis_cache.cache.WEATHER_TTL_S", 5)
+    cache = WeatherCache(fake_redis)
+    weather_data = {
+        "current_weather": {
+            "time": "2024-01-01T00:00",
+            "temperature": 10.5,
+            "windspeed": 5.0,
+            "winddirection": 180,
+            "is_day": 1,
+            "weathercode": 1,
+        }
+    }
+    cache.save_weather("New York", weather_data)
+    assert cache.get_weather("New York") is not None
+    time.sleep(6)
+    assert cache.get_weather("New York") is None
