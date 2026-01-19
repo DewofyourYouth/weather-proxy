@@ -1,3 +1,5 @@
+"""Weather service integration, caching, and retry logic."""
+
 import time
 
 import httpx
@@ -14,14 +16,17 @@ RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class WeatherServiceError(Exception):
+    """Base exception for weather service failures."""
     pass
 
 
 class CityNotFoundError(WeatherServiceError):
+    """Raised when a city lookup returns no results."""
     pass
 
 
 class ExternalAPIError(WeatherServiceError):
+    """Raised when the external weather APIs fail."""
     pass
 
 
@@ -34,6 +39,22 @@ def _request_with_retry(
     log_context: dict,
     error_message: str,
 ) -> httpx.Response:
+    """Execute an HTTP GET with retry/backoff and consistent logging.
+
+    Args:
+        url: The URL to call.
+        params: Query parameters to include in the request.
+        timeout: Request timeout in seconds.
+        event_prefix: Log event prefix for consistent names.
+        log_context: Extra log fields for all events.
+        error_message: Error message to wrap in ExternalAPIError.
+
+    Returns:
+        The successful HTTP response.
+
+    Raises:
+        ExternalAPIError: When the request fails after retries.
+    """
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
             response = httpx.get(url, params=params, timeout=timeout)
@@ -80,7 +101,14 @@ def _request_with_retry(
 
 
 def get_city_data(city_name: str) -> City:
-    """Return data about specific city."""
+    """Return city data from cache or external API.
+
+    Args:
+        city_name: City name to look up.
+
+    Returns:
+        A City model for the requested city.
+    """
     cache = city_cache()
     if city := cache.get_city(city_name):
         logger.info("CACHED_CITY_HIT", city=city_name)
@@ -91,6 +119,18 @@ def get_city_data(city_name: str) -> City:
 
 
 def get_city_from_api(city_name: str) -> City:
+    """Fetch city data from the geocoding API.
+
+    Args:
+        city_name: City name to look up.
+
+    Returns:
+        A City model for the first matching result.
+
+    Raises:
+        CityNotFoundError: If no city results are returned.
+        ExternalAPIError: If the response payload is invalid.
+    """
     logger.info("CACHE_CITY_MISS", city=city_name)
     response = _request_with_retry(
         url="https://geocoding-api.open-meteo.com/v1/search",
@@ -118,7 +158,17 @@ def get_city_from_api(city_name: str) -> City:
 
 
 def get_weather_data_from_api(city: City) -> Weather:
-    """Return weather data about a specific city."""
+    """Fetch current weather data for a city from the weather API.
+
+    Args:
+        city: City model containing coordinates.
+
+    Returns:
+        Raw weather payload containing current weather data.
+
+    Raises:
+        ExternalAPIError: If the weather payload is missing expected data.
+    """
     logger.info("CACHED_WEATHER_MISS", city=city.name)
     response = _request_with_retry(
         url="https://api.open-meteo.com/v1/forecast",
@@ -141,7 +191,14 @@ def get_weather_data_from_api(city: City) -> Weather:
 
 
 def get_weather(city_name: str):
-    """Return weather data about a specific city."""
+    """Return a Weather model for the requested city.
+
+    Args:
+        city_name: City name to look up.
+
+    Returns:
+        Weather data from cache or the external API.
+    """
     city = get_city_data(city_name)
     cache = weather_cache()
     if weather_data := cache.get_weather(city_name):

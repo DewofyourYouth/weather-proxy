@@ -1,3 +1,5 @@
+"""Weather model and code mapping helpers."""
+
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -35,6 +37,8 @@ WEATHER_CODE_MAP = {
 
 
 class Weather(BaseModel):
+    """Weather payload exposed by the API."""
+
     city: str  # You’ll likely be injecting this from your own lookup
     time: datetime
     temperature_c: float
@@ -46,6 +50,15 @@ class Weather(BaseModel):
 
     @classmethod
     def from_api_response(cls, city: str, api_data: dict) -> "Weather":
+        """Create a Weather model from the external API payload.
+
+        Args:
+            city: City name string.
+            api_data: API payload containing current weather data.
+
+        Returns:
+            A populated Weather model.
+        """
         current = api_data["current_weather"]
         code = current["weathercode"]
         return cls(

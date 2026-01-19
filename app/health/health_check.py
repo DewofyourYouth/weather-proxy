@@ -1,3 +1,5 @@
+"""Health checks for Redis and the external weather API."""
+
 import httpx
 
 from app.logging_config import logger
@@ -6,6 +8,11 @@ from app.redis_cache.cache import redis_client
 
 
 def is_redis_available() -> ServiceStatus:
+    """Check Redis connectivity.
+
+    Returns:
+        ServiceStatus.available when Redis responds, else not_available.
+    """
     try:
         redis_client.ping()
         logger.info("REDIS CONNECTED")
@@ -16,6 +23,11 @@ def is_redis_available() -> ServiceStatus:
 
 
 async def is_weather_api_available() -> bool:
+    """Check the external weather API for availability.
+
+    Returns:
+        True if the API responds with current weather data.
+    """
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(

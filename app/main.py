@@ -1,3 +1,5 @@
+"""FastAPI application routes, middleware, and metrics."""
+
 import time
 import uuid
 
@@ -29,10 +31,19 @@ REQUEST_LATENCY = Histogram(
 
 @app.middleware("http")
 async def request_logging(request: Request, call_next):
+    """Log request details, attach a request ID, and record metrics.
+
+    Args:
+        request: Incoming HTTP request.
+        call_next: FastAPI handler for the next middleware/app.
+
+    Returns:
+        The response produced by the downstream handler.
+    """
     request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
     bind_contextvars(request_id=request_id)
     start = time.perf_counter()
-    response = None
+    response        = None
     try:
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
@@ -57,31 +68,72 @@ async def request_logging(request: Request, call_next):
 
 @app.exception_handler(CityNotFoundError)
 async def city_not_found_handler(request: Request, exc: CityNotFoundError):
+    """Convert city lookup errors into 404 responses.
+
+    Args:
+        request: Incoming HTTP request.
+        exc: Raised city lookup error.
+
+    Returns:
+        A JSON response with the error detail.
+    """
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.exception_handler(ExternalAPIError)
 async def external_api_error_handler(request: Request, exc: ExternalAPIError):
+    """Convert external API errors into 502 responses.
+
+    Args:
+        request: Incoming HTTP request.
+        exc: Raised external API error.
+
+    Returns:
+        A JSON response with the error detail.
+    """
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.exception_handler(WeatherServiceError)
 async def weather_service_error_handler(request: Request, exc: WeatherServiceError):
+    """Convert unexpected weather service errors into 500 responses.
+
+    Args:
+        request: Incoming HTTP request.
+        exc: Raised weather service error.
+
+    Returns:
+        A JSON response with a generic error message.
+    """
     return JSONResponse(status_code=500, content={"detail": "Unexpected error"})
 
 
 @app.get("/")
 async def root():
+    """Return a basic liveness response."""
     return {"message": "Hello World"}
 
 
 @app.get("/weather")
 async def get_weather_for_city(city_name: str) -> Weather:
+    """Fetch weather data for the requested city.
+
+    Args:
+        city_name: City name string from the query parameter.
+
+    Returns:
+        A Weather model populated from cached or external data.
+    """
     return get_weather(city_name)
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    """Report API health and dependency availability.
+
+    Returns:
+        A HealthResponse containing dependency status.
+    """
     weather_api_available = await is_weather_api_available()
     return HealthResponse(
         status="ok",
@@ -96,4 +148,5 @@ async def health() -> HealthResponse:
 
 @app.get("/metrics")
 async def metrics():
+    """Expose Prometheus metrics for scraping."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
