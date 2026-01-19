@@ -43,7 +43,7 @@ async def request_logging(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
     bind_contextvars(request_id=request_id)
     start = time.perf_counter()
-    response        = None
+    response = None
     try:
         response = await call_next(request)
         response.headers["x-request-id"] = request_id

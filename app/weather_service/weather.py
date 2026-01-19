@@ -17,16 +17,19 @@ RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 class WeatherServiceError(Exception):
     """Base exception for weather service failures."""
+
     pass
 
 
 class CityNotFoundError(WeatherServiceError):
     """Raised when a city lookup returns no results."""
+
     pass
 
 
 class ExternalAPIError(WeatherServiceError):
     """Raised when the external weather APIs fail."""
+
     pass
 
 
